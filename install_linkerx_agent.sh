@@ -23,6 +23,11 @@ ca_b64=""
 agent_url=""
 agent_url_amd64=""
 agent_url_arm64=""
+allow_server_command_exec="false"
+instance_key=""
+base_dir=""
+agent_service_name=""
+gost_service_name=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -46,6 +51,21 @@ while [[ $# -gt 0 ]]; do
       ;;
     --agent_url_arm64|--agent-url-arm64)
       agent_url_arm64="${2:-}"; shift 2
+      ;;
+    --allow_server_command_exec|--allow-server-command-exec)
+      allow_server_command_exec="${2:-false}"; shift 2
+      ;;
+    --instance_key|--instance-key)
+      instance_key="${2:-}"; shift 2
+      ;;
+    --base_dir|--base-dir)
+      base_dir="${2:-}"; shift 2
+      ;;
+    --agent_service_name|--agent-service-name)
+      agent_service_name="${2:-}"; shift 2
+      ;;
+    --gost_service_name|--gost-service-name)
+      gost_service_name="${2:-}"; shift 2
       ;;
     -h|--help)
       usage
@@ -93,7 +113,29 @@ if [[ ! -f "${src_bin}" && -z "${agent_url}" && -z "${agent_url_amd64}" && -z "$
   exit 1
 fi
 
-install_dir="/etc/linkerx"
+if [[ -z "${base_dir}" ]]; then
+  if [[ -z "${instance_key}" ]]; then
+    base_dir="/etc/linkerx"
+  else
+    base_dir="/etc/linkerx/${instance_key}"
+  fi
+fi
+if [[ -z "${agent_service_name}" ]]; then
+  if [[ -z "${instance_key}" ]]; then
+    agent_service_name="linkerx-agent"
+  else
+    agent_service_name="linkerx-agent-${instance_key}"
+  fi
+fi
+if [[ -z "${gost_service_name}" ]]; then
+  if [[ -z "${instance_key}" ]]; then
+    gost_service_name="linkerx-gost"
+  else
+    gost_service_name="linkerx-gost-${instance_key}"
+  fi
+fi
+
+install_dir="${base_dir}"
 mkdir -p "${install_dir}"
 
 installed_bin="${install_dir}/linkerx-agent"
@@ -160,26 +202,43 @@ if [[ ! -s "${ca_path}" ]]; then
   insecure="true"
 fi
 
-cat > "${install_dir}/linkerx_conf.json" <<EOF
+case "${allow_server_command_exec}" in
+  true|false)
+    ;;
+  *)
+    echo "--allow_server_command_exec 仅支持 true 或 false" >&2
+    exit 2
+    ;;
+esac
+
+config_path="${install_dir}/linkerx_conf.json"
+agent_unit_path="/etc/systemd/system/${agent_service_name}.service"
+
+cat > "${config_path}" <<EOF
 {
   "server_ip": "${server_ip}",
   "server_port": ${port},
   "token": "${token}",
   "interval": "10s",
   "tls_ca": "${ca_path}",
-  "insecure": ${insecure}
+  "insecure": ${insecure},
+  "allow_server_command_exec": ${allow_server_command_exec},
+  "instance_key": "${instance_key}",
+  "base_dir": "${base_dir}",
+  "agent_service_name": "${agent_service_name}",
+  "gost_service_name": "${gost_service_name}"
 }
 EOF
 
-cat > /etc/systemd/system/linkerx-agent.service <<'EOF'
+cat > "${agent_unit_path}" <<EOF
 [Unit]
-Description=linkerx-agent Proxy Service
+Description=${agent_service_name} Proxy Service
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-WorkingDirectory=/etc/linkerx
-ExecStart=/etc/linkerx/linkerx-agent -c /etc/linkerx/linkerx_conf.json
+WorkingDirectory=${base_dir}
+ExecStart=${installed_bin} -c ${config_path}
 
 Restart=always
 RestartSec=1
@@ -189,8 +248,9 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now linkerx-agent
-systemctl --no-pager -l status linkerx-agent || true
+systemctl enable --now "${agent_service_name}"
+sleep 2
+systemctl --no-pager -l status "${agent_service_name}" || true
 
 rm -f -- "${script_path}" 2>/dev/null || true
-echo "安装完成：/etc/linkerx/linkerx-agent （systemd 服务: linkerx-agent）"
+echo "安装完成：${installed_bin} （systemd 服务: ${agent_service_name}）"
