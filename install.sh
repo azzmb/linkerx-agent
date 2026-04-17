@@ -28,8 +28,8 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   INSTALL_MODE=upgrade|reinstall
   BACKEND_IMAGE=${BACKEND_IMAGE}
   FRONTEND_IMAGE=${FRONTEND_IMAGE}
-  LINKERX_LIC_LICENSE_ID=...         reinstall 时必填
-  LINKERX_LIC_ENROLL_TOKEN=...       reinstall 时必填
+  LINKERX_LIC_LICENSE_ID=...         可选
+  LINKERX_LIC_ENROLL_TOKEN=...       可选
 EOF
   exit 0
 fi
@@ -266,13 +266,6 @@ fi
 if [[ -z "${PUBLIC_BASE_URL}" ]]; then
   HOST_IP="$(detect_host_ip)"
   PUBLIC_BASE_URL="$(prompt_with_default 'PUBLIC_BASE_URL (用于前端访问/agent 下载链接)' "https://${HOST_IP}:${WEB_PORT}")"
-fi
-
-if [[ -z "${LINKERX_LIC_LICENSE_ID}" ]]; then
-  LINKERX_LIC_LICENSE_ID="$(prompt_required 'License ID（必填）')" || exit 1
-fi
-if [[ -z "${LINKERX_LIC_ENROLL_TOKEN}" ]]; then
-  LINKERX_LIC_ENROLL_TOKEN="$(prompt_required 'Enroll Token（必填）')" || exit 1
 fi
 
 DOWNLOAD_SECRET="${DOWNLOAD_SECRET:-$(rand_lc_alnum 64)}"
