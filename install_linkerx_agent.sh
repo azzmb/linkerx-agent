@@ -9,7 +9,7 @@ usage() {
 
 说明:
   - 会把 agent 安装到 /etc/linkerx/linkerx-agent（优先使用同目录二进制；否则用 --agent_url 下载）
-  - 可通过 --ca_b64 传入 CA 证书（base64 编码后的 PEM 内容），并写入 /etc/linkerx/ca.pem
+  - 传入 --ca_b64 时启用 TLS 强校验；不传时将使用 insecure=true 连接后端
   - 会生成 /etc/linkerx/linkerx_conf.json
   - 会写入并启动 /etc/systemd/system/linkerx-agent.service
   - 脚本执行完成后会自删除
@@ -198,8 +198,10 @@ if [[ -n "${ca_b64}" ]]; then
 fi
 
 insecure="false"
+tls_ca_config="${ca_path}"
 if [[ ! -s "${ca_path}" ]]; then
   insecure="true"
+  tls_ca_config=""
 fi
 
 case "${allow_server_command_exec}" in
@@ -220,7 +222,7 @@ cat > "${config_path}" <<EOF
   "server_port": ${port},
   "token": "${token}",
   "interval": "10s",
-  "tls_ca": "${ca_path}",
+  "tls_ca": "${tls_ca_config}",
   "insecure": ${insecure},
   "allow_server_command_exec": ${allow_server_command_exec},
   "instance_key": "${instance_key}",
